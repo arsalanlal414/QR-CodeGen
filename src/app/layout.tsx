@@ -18,8 +18,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="font-sans antialiased">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body className="font-sans antialiased" suppressHydrationWarning>
         {/* Ambient blobs — purely decorative */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden>
           <div className="absolute -top-60 -right-60 w-[500px] h-[500px] bg-teal-700/20 rounded-full blur-[120px]" />
