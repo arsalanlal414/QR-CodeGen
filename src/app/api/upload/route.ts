@@ -47,19 +47,19 @@ export async function POST(request: NextRequest) {
     // ── Store image ───────────────────────────────────────────────────────────
     const id = crypto.randomUUID()
 
-    // Build a safe filename from the original name, prefixed with the UUID
-    // to guarantee uniqueness while keeping the human-readable name visible.
+    // Sanitize original name; keep it human-readable.
+    // Uniqueness is guaranteed by scoping it inside a per-upload UUID folder.
     const safeName = file.name
       .replace(/[^a-zA-Z0-9._-]/g, '_') // strip unsafe chars
       .replace(/_{2,}/g, '_')            // collapse consecutive underscores
       .replace(/^_+|_+$/g, '')          // trim leading/trailing underscores
       .toLowerCase()
-    const filename = `${id}_${safeName}`
+    const filename = safeName
 
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const imageUrl = await storeImage(filename, buffer, file.type)
+    const imageUrl = await storeImage(id, filename, buffer, file.type)
 
     // ── Store metadata ────────────────────────────────────────────────────────
     const metadata: ImageMetadata = {

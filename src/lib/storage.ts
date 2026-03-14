@@ -16,16 +16,20 @@ const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN
 
 /**
  * Persist an image buffer and return its public-accessible URL.
- * @param filename  Final sanitized filename (including extension) to store under.
+ * The file is scoped under uploads/{id}/{filename} so the filename itself
+ * stays as the original sanitized name while the UUID folder guarantees uniqueness.
  */
 export async function storeImage(
+  id: string,
   filename: string,
   buffer: Buffer,
   mimetype: string,
 ): Promise<string> {
+  const blobPath = `uploads/${id}/${filename}`
+
   if (USE_BLOB) {
     const { put } = await import('@vercel/blob')
-    const blob = await put(`uploads/${filename}`, buffer, {
+    const blob = await put(blobPath, buffer, {
       access: 'public',
       contentType: mimetype,
       addRandomSuffix: false,
@@ -38,12 +42,12 @@ export async function storeImage(
   const { existsSync } = await import('fs')
   const { join } = await import('path')
 
-  const dir = join(process.cwd(), 'public', 'uploads')
+  const dir = join(process.cwd(), 'public', 'uploads', id)
   if (!existsSync(dir)) await mkdir(dir, { recursive: true })
   await writeFile(join(dir, filename), buffer)
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-  return `${baseUrl}/uploads/${filename}`
+  return `${baseUrl}/uploads/${id}/${filename}`
 }
 
 // ── Metadata storage ──────────────────────────────────────────────────────────
