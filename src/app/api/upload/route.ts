@@ -44,27 +44,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Store image ───────────────────────────────────────────────────────────
-    const id = crypto.randomUUID()
-
-    // Sanitize original name; keep it human-readable.
-    // Uniqueness is guaranteed by scoping it inside a per-upload UUID folder.
-    const safeName = file.name
+    // ── Derive slug & filename ─────────────────────────────────────────────
+    // slug  = sanitized name WITHOUT extension  → used as the URL path segment
+    // filename = slug + extension               → used for the stored file
+    const nameWithoutExt = file.name.replace(/\.[^.]+$/, '') // strip extension
+    const slug = nameWithoutExt
       .replace(/[^a-zA-Z0-9._-]/g, '_') // strip unsafe chars
       .replace(/_{2,}/g, '_')            // collapse consecutive underscores
       .replace(/^_+|_+$/g, '')          // trim leading/trailing underscores
       .toLowerCase()
-    const filename = safeName
+    const filename = `${slug}.${ext}`
 
+    // ── Store image ───────────────────────────────────────────────────────────
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const imageUrl = await storeImage(id, filename, buffer, file.type)
+    const imageUrl = await storeImage(filename, buffer, file.type)
 
-    // ── Store metadata ────────────────────────────────────────────────────────
+    // ── Store metadata (keyed by slug) ────────────────────────────────────────
     const metadata: ImageMetadata = {
-      id,
-      originalName: file.name.replace(/[^\w.\-]/g, '_'),
+      id: slug,
+      originalName: file.name,
       filename,
       imageUrl,
       mimetype: file.type,
@@ -72,14 +72,14 @@ export async function POST(request: NextRequest) {
       uploadedAt: new Date().toISOString(),
     }
 
-    await storeMetadata(id, metadata)
+    await storeMetadata(slug, metadata)
 
     // ── Build response ────────────────────────────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-    const imagePageUrl = `${baseUrl}/image/${id}`
+    const imagePageUrl = `${baseUrl}/image/${slug}`
 
     const response: UploadResponse = {
-      id,
+      id: slug,
       filename,
       imageUrl,
       imagePageUrl,

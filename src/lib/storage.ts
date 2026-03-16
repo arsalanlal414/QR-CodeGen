@@ -16,16 +16,14 @@ const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN
 
 /**
  * Persist an image buffer and return its public-accessible URL.
- * The file is scoped under uploads/{id}/{filename} so the filename itself
- * stays as the original sanitized name while the UUID folder guarantees uniqueness.
+ * Files are stored directly as uploads/{filename} using the original sanitized name.
  */
 export async function storeImage(
-  id: string,
   filename: string,
   buffer: Buffer,
   mimetype: string,
 ): Promise<string> {
-  const blobPath = `uploads/${id}/${filename}`
+  const blobPath = `uploads/${filename}`
 
   if (USE_BLOB) {
     const { put } = await import('@vercel/blob')
@@ -42,12 +40,12 @@ export async function storeImage(
   const { existsSync } = await import('fs')
   const { join } = await import('path')
 
-  const dir = join(process.cwd(), 'public', 'uploads', id)
+  const dir = join(process.cwd(), 'public', 'uploads')
   if (!existsSync(dir)) await mkdir(dir, { recursive: true })
   await writeFile(join(dir, filename), buffer)
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-  return `${baseUrl}/uploads/${id}/${filename}`
+  return `${baseUrl}/uploads/${filename}`
 }
 
 // ── Metadata storage ──────────────────────────────────────────────────────────
@@ -81,19 +79,19 @@ export async function storeMetadata(id: string, metadata: ImageMetadata): Promis
 
 // ── Metadata retrieval ────────────────────────────────────────────────────────
 
-/** UUID v4 regex — used to validate route params before any I/O */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+/** Only allow safe URL slug characters to prevent path traversal */
+const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,199}$/i
 
 /**
- * Retrieve metadata by image ID.
- * Returns `null` when the ID is invalid or the image does not exist.
+ * Retrieve metadata by slug (the filename stem used as the URL path segment).
+ * Returns `null` when the slug is invalid or no image was found.
  */
-export async function getMetadata(id: string): Promise<ImageMetadata | null> {
-  if (!UUID_RE.test(id)) return null
+export async function getMetadata(slug: string): Promise<ImageMetadata | null> {
+  if (!SLUG_RE.test(slug)) return null
 
   if (USE_BLOB) {
     const { list } = await import('@vercel/blob')
-    const { blobs } = await list({ prefix: `metadata/${id}.json` })
+    const { blobs } = await list({ prefix: `metadata/${slug}.json` })
     if (!blobs.length) return null
 
     try {
@@ -110,7 +108,7 @@ export async function getMetadata(id: string): Promise<ImageMetadata | null> {
   const { existsSync } = await import('fs')
   const { join } = await import('path')
 
-  const metaPath = join(process.cwd(), 'data', 'uploads', `${id}.json`)
+  const metaPath = join(process.cwd(), 'data', 'uploads', `${slug}.json`)
   if (!existsSync(metaPath)) return null
 
   try {
