@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { ImageMetadata, UploadResponse } from '@/types'
 import { storeImage, storeMetadata } from '@/lib/storage'
+import { v4 as uuidv4 } from 'uuid'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -44,43 +45,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Derive slug & filename ─────────────────────────────────────────────
-    // slug  = sanitized name WITHOUT extension  → used as the URL path segment
-    // filename = slug + extension               → used for the stored file
-    const nameWithoutExt = file.name.replace(/\.[^.]+$/, '') // strip extension
-    const slug = nameWithoutExt
-      .replace(/[^a-zA-Z0-9._-]/g, '_') // strip unsafe chars
-      .replace(/_{2,}/g, '_')            // collapse consecutive underscores
-      .replace(/^_+|_+$/g, '')          // trim leading/trailing underscores
-      .toLowerCase()
-    const filename = `${slug}.${ext}`
+    // ── Generate unique ID ─────────────────────────────────────────────
+    const uniqueId = uuidv4() // Generate a unique ID for this upload
+    
+    // Keep original name for display but use unique ID for storage
+    const originalName = file.name
+    const extension = ext
+    
+    // Filename for storage (using unique ID)
+    const storageFilename = `${uniqueId}.${extension}`
 
     // ── Store image ───────────────────────────────────────────────────────────
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const imageUrl = await storeImage(filename, buffer, file.type)
+    // Update storeImage to handle the new approach
+    const imageUrl = await storeImage(storageFilename, buffer, file.type)
 
-    // ── Store metadata (keyed by slug) ────────────────────────────────────────
+    // ── Store metadata (keyed by uniqueId) ────────────────────────────────────────
     const metadata: ImageMetadata = {
-      id: slug,
-      originalName: file.name,
-      filename,
+      id: uniqueId,
+      originalName: originalName, // Store original name for display
+      filename: storageFilename,
       imageUrl,
       mimetype: file.type,
       size: file.size,
       uploadedAt: new Date().toISOString(),
     }
 
-    await storeMetadata(slug, metadata)
+    await storeMetadata(uniqueId, metadata)
 
     // ── Build response ────────────────────────────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-    const imagePageUrl = `${baseUrl}/image/${slug}`
+    const imagePageUrl = `${baseUrl}/image/${uniqueId}`
 
     const response: UploadResponse = {
-      id: slug,
-      filename,
+      id: uniqueId,
+      filename: storageFilename,
+      originalName: originalName, // Add this to your UploadResponse type
       imageUrl,
       imagePageUrl,
       metadata,
