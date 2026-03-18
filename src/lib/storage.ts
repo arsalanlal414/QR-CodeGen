@@ -9,7 +9,6 @@
  */
 
 import type { ImageMetadata } from '@/types'
-import { v4 as uuidv4 } from 'uuid'
 
 const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN
 
@@ -17,30 +16,23 @@ const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN
 
 /**
  * Persist an image buffer and return its public-accessible URL.
- * Files are stored with unique names to prevent overwrites.
+ * Files are stored directly as uploads/{filename} using the unique filename.
  */
 export async function storeImage(
-  filename: string,
+  filename: string, // This should now be the unique filename (e.g., "abc123.jpg")
   buffer: Buffer,
   mimetype: string,
-): Promise<{ imageUrl: string; uniqueFilename: string }> {  // ← Changed return type
-  // Generate unique ID for the file
-  const uniqueId = uuidv4();
-  const extension = filename.split('.').pop() || 'jpg';
-  const uniqueFilename = `${uniqueId}.${extension}`;  // ← Use ID as filename
-  const blobPath = `uploads/${uniqueFilename}`;
+): Promise<string> {
+  const blobPath = `uploads/${filename}`
 
   if (USE_BLOB) {
-    const { put } = await import('@vercel/blob')
+    const { put } = await import('@vercel/blobs')
     const blob = await put(blobPath, buffer, {
       access: 'public',
       contentType: mimetype,
-      addRandomSuffix: false,  // We're handling uniqueness ourselves
+      addRandomSuffix: false, // We're handling uniqueness ourselves
     })
-    return { 
-      imageUrl: blob.url,
-      uniqueFilename 
-    };
+    return blob.url
   }
 
   // ── Local filesystem fallback ─────────────────────────────────────────────
@@ -50,26 +42,25 @@ export async function storeImage(
 
   const dir = join(process.cwd(), 'public', 'uploads')
   if (!existsSync(dir)) await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, uniqueFilename), buffer)
+  
+  // Save with the unique filename
+  await writeFile(join(dir, filename), buffer)
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-  return { 
-    imageUrl: `${baseUrl}/uploads/${uniqueFilename}`,
-    uniqueFilename 
-  };
+  return `${baseUrl}/uploads/${filename}`
 }
 
 // ── Metadata storage ──────────────────────────────────────────────────────────
 
 /**
- * Persist image metadata. The metadata object stores the original filename
- * for display, but the image URL uses the unique filename.
+ * Persist image metadata. The metadata object itself stores the image URL so
+ * the display page never has to reconstruct it.
  */
 export async function storeMetadata(id: string, metadata: ImageMetadata): Promise<void> {
   const json = JSON.stringify(metadata, null, 2)
 
   if (USE_BLOB) {
-    const { put } = await import('@vercel/blob')
+    const { put } = await import('@vercel/blobs')
     await put(`metadata/${id}.json`, json, {
       access: 'public',
       contentType: 'application/json',
@@ -101,12 +92,12 @@ export async function getMetadata(slug: string): Promise<ImageMetadata | null> {
   if (!SLUG_RE.test(slug)) return null
 
   if (USE_BLOB) {
-    const { list } = await import('@vercel/blob')
+    const { list } = await import('@vercel/blobs')
     const { blobs } = await list({ prefix: `metadata/${slug}.json` })
     if (!blobs.length) return null
 
     try {
-      const res = await fetch(blobs[0].url, { cache: 'no-store' })
+      const res = await fetch(blobs[0].url)
       if (!res.ok) return null
       return (await res.json()) as ImageMetadata
     } catch {
