@@ -12,18 +12,21 @@ export async function generateMetadata({
   const meta = await getMetadata(id)
   if (!meta) return { title: 'Image Not Found' }
 
+  // Remove extension from filename for display
+  const displayName = meta.originalName.replace(/\.[^/.]+$/, "")
+
   return {
-    title: `${meta.originalName}- 中文考试服务网`,
+    title: `${displayName} - 中文考试服务网`,  // ← CHANGED
     description: 'View this shared image on QRShare.',
     openGraph: {
-      title: meta.originalName,
+      title: displayName,  // ← CHANGED
       description: 'Shared via QRShare',
-      images: [{ url: meta.imageUrl, alt: meta.originalName }],
+      images: [{ url: meta.imageUrl, alt: displayName }],  // ← CHANGED
       type: 'article',
     },
     twitter: {
       card: 'summary_large_image',
-      title: meta.originalName,
+      title: displayName,  // ← CHANGED
       description: 'Shared via QRShare',
       images: [meta.imageUrl],
     },
@@ -37,13 +40,14 @@ export default async function ImagePage({ params }: { params: Promise<{ id: stri
   if (!meta) notFound()
 
   const imageUrl = meta.imageUrl
-// Remove extension from filename for display
+  // Remove extension from filename for display
   const displayName = meta.originalName.replace(/\.[^/.]+$/, "")
+  
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={imageUrl}
-      alt={meta.originalName}
+      alt={displayName}  // ← CHANGED (was meta.originalName)
       style={{
         display: 'block',
         width: '100%',
